@@ -11,12 +11,13 @@ const headers = {
 require('dotenv').config()
 
 const customerQueryStringForFirstPage = `query GetCustomers {
-    customers(first:250, query: "tag:password-page") {
+    customers(first:250, query: "state:invited OR state:disabled") {
     edges {
       node {
         id
         email
         tags
+        state
       }
     }
     pageInfo {
@@ -26,12 +27,13 @@ const customerQueryStringForFirstPage = `query GetCustomers {
   }
 }`
 const customerQueryString = `query GetCustomers($after: String!) {
-    customers(first: 250, after: $after, query: "tag:password-page") {
+    customers(first: 250, after: $after, query: "state:invited OR state:disabled") {
     edges {
       node {
         id
         email
         tags
+        state
       }
     }
     pageInfo {
@@ -75,7 +77,7 @@ const queryEmailCustomers = async () => {
         const customers = result?.body?.data?.customers?.edges || []
         allCustomers = allCustomers.concat(customers)
         
-        console.log('[queryWholesaleCustomers]', customers.length)
+        console.log('[Querying un-activated customers]', customers.length)
       }
       catch (err) {
         // console.log('[error]', err.message)
@@ -83,10 +85,12 @@ const queryEmailCustomers = async () => {
       }
     }
   
-    console.log('[allCustomers]', allCustomers.length)
+    console.log('[Number of un-activated customers]', allCustomers.length)
   
     return allCustomers
 }
+
+const timer = ms => new Promise(res => setTimeout(res, ms))
 
 const handler = async () => {
     // const method = event.httpMethod;
@@ -96,10 +100,10 @@ const handler = async () => {
         case 'POST':
             try {
                 const allCustomers = await queryEmailCustomers()
-                console.log('[allCustomers]', allCustomers)
 
                 for(let i = 0; i < allCustomers.length; i++) {
                     const customer = allCustomers[i].node
+                    console.log('[STATE]', customer.state)
                     const customerGlobalId = customer.id
                     const customerId = customerGlobalId.split('/').reverse()[0]
 
@@ -111,7 +115,11 @@ const handler = async () => {
                         }
                     })
                     const result = await response.json()
-                    console.log('[Account invite]', result)
+                    console.log('[Account invite - ' + i + ']', result)
+
+                    if (i > 99 && i % 100 === 0) {
+                      await timer(10 * 60 * 1000)
+                    }
                 }
 
                 return {
